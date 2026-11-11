@@ -979,3 +979,45 @@ def test_eeglab_eog_montage(reader, fname, eog, eog_names, eeg_name):
     for ch_name in eog_names:
         assert ch_name not in mon.ch_names
     assert eeg_name in mon.ch_names
+
+
+@pytest.mark.parametrize("first", ["labels", "type"])
+def test_empty_chanlocs_fields(first):
+    """Empty fields cannot determine the number of channels or lose labels."""
+    fields = dict(labels=["Fz", "Cz"], type=np.array([]))
+    channels = _dol_to_lod({first: fields[first], **fields})
+    assert [ch["labels"] for ch in channels] == ["Fz", "Cz"]
+    assert all(ch["type"].size == 0 for ch in channels)
+
+
+@pytest.mark.parametrize(
+    "event", [{"latency": [5.0, 9.0]}, {"type": ["a", "b"], "latency": [5.0, []]}]
+)
+def test_incomplete_events(tmp_path, event):
+    """Missing labels and empty latencies do not block reading signal data."""
+    fname = tmp_path / "test.set"
+    data = np.arange(60).reshape(3, 20)
+    io.savemat(
+        fname,
+        {
+            "EEG": dict(
+                nbchan=3,
+                pnts=20,
+                trials=1,
+                srate=100.0,
+                xmin=0.0,
+                data=data,
+                chanlocs=np.array([("Fz",), ("Cz",), ("Pz",)], dtype=[("labels", "O")]),
+                event=event,
+            )
+        },
+    )
+    if "type" in event:
+        with pytest.warns(RuntimeWarning, match="empty.*latency"):
+            raw = read_raw_eeglab(fname)
+        assert list(raw.annotations.description) == ["a"]
+    else:
+        raw = read_raw_eeglab(fname)
+        assert list(raw.annotations.description) == ["n/a", "n/a"]
+    assert_allclose(raw.annotations.onset[0], 0.04)
+    assert_allclose(raw.get_data(), data * 1e-6)

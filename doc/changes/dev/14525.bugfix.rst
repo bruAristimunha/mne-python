@@ -1,0 +1,1 @@
+Read EEGLAB files with empty channel-location fields, missing event types or empty event latencies, by `Bruno Aristimunha`_.
