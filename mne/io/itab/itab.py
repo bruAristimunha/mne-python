@@ -1,182 +1,145 @@
-# Author: Vittorio Pizzella <vittorio.pizzella@unich.it>
-#
-# License: BSD (3-clause)
+# Authors: The MNE-Python contributors.
+# License: BSD-3-Clause
+# Copyright the MNE-Python contributors.
 
-import numpy as np
+from pathlib import Path
 
-from ..._fiff.utils import _mult_cal_one
-from ...utils import (
-    _check_fname,
-    fill_doc,
-    verbose,
-)
+from ..._fiff.utils import _read_segments_file
+from ...utils import _check_fname, _verbose_control, fill_doc_static, verbose_static
 from ..base import BaseRaw
+from .constants import ITAB
 from .info import _mhd2info
 from .mhd import _read_mhd
 
 
+@fill_doc_static("preload", "verbose")
 class RawITAB(BaseRaw):
-    """Raw object from ITAB directory.
+    """Raw object from an ITAB MEG file.
 
     Parameters
     ----------
-    fname : str
-        The raw file to load. Filename should end with *.raw
-    preload : bool or str (default False)
+    fname : path-like
+        Path to the ITAB data file (``.raw``). The header file with the same name
+        plus ``.mhd`` (e.g., ``run01.raw.mhd``) must be in the same directory.
+    preload : bool | str
         Preload data into memory for data manipulation and faster indexing.
         If True, the data will be preloaded into memory (fast, requires
-        large amount of memory). If preload is a string, preload is the
-        file name of a memory-mapped file which is used to store the data
-        on the hard drive (slower, requires less memory).
-    verbose : bool, str, int, or None
-        If not None, override default verbose level (see mne.verbose).
+        large amount of memory). If preload is a string, it is the name of a
+        freshly created memory-mapped file used to store the data on the hard
+        drive (slower, requires less memory). An existing file is overwritten.
+        The caller owns the file and is responsible for removing it after the
+        Raw object is no longer in use. For supported Raw readers, the exact string
+        ``"auto"`` instead reuses decoded data below the directory configured by
+        :func:`mne.set_cache_dir`. Entries persist without a size limit and are mapped
+        copy-on-write. Use ``Path("auto")`` for a literal filename.
+
+        .. versionchanged:: 1.13
+           Support for the ``"auto"`` decoded-data cache was added.
+    verbose : bool | str | int | None
+        Control verbosity of the logging output. If ``None``, use the default
+        verbosity level. See the :ref:`logging documentation <tut-logging>` and
+        :func:`mne.verbose` for details. Should only be passed as a keyword
+        argument.
 
     See Also
     --------
-    mne.io.Raw : Documentation of attribute and methods.
+    mne.io.Raw : Documentation of attributes and methods.
     """
 
-    @verbose
-    def __init__(self, fname, preload=False, verbose=None):
-
-        filenames = list()
-        filenames.append(fname)
-
-        fname = _check_fname(fname, overwrite="read", must_exist=True)
-
+    @_verbose_control
+    def __init__(self, fname, preload=False, *, verbose=None):
+        fname = _check_fname(fname, "read", True, "fname")
         fname_mhd = fname.with_name(fname.name + ".mhd")
-        try:
-            mhd = _read_mhd(fname_mhd)  # Read the mhd file
-        except FileNotFoundError:
-            raise ValueError(".mhd file not found")
-
-        info = _mhd2info(mhd)
-
-        orig_units = {ch["label"]: ch["unit"] for ch in mhd["ch"]}
-
-        raw_extras = list()
-        for fi, _ in enumerate(filenames):
-            raw_extras.append(dict())
-            for k in ["n_samp", "start_data", "units"]:
-                raw_extras[fi][k] = info["temp"][k]
-
-            raw_extras[fi]["nchan"] = info["nchan"]
-            raw_extras[fi]["buffer_size_sec"] = info["temp"]["n_samp"] / info["sfreq"]
-            raw_extras[fi]["data_type"] = mhd["data_type"]
-
-        self.info = info
-        info._check_consistency()
-
-        first_samps = [0]
-        last_samps = [info["temp"]["n_samp"] - 1]
-
-        annotations = info["temp"]["annotations"]
-
-        # Remove extras from info
-        del info["temp"]
-
+        _check_fname(fname_mhd, "read", True, "ITAB header file")
+        mhd = _read_mhd(fname_mhd)
+        info, annotations = _mhd2info(mhd)
+        little_endian = mhd["data_type"] == ITAB.DATA_TYPE_LITTLE_ENDIAN
+        raw_extras = dict(
+            dtype="<i4" if little_endian else ">i4",
+            n_channels=mhd["nchan"],
+            offset=mhd["start_data"],
+        )
         super().__init__(
             info,
             preload,
-            first_samps=first_samps,
-            last_samps=last_samps,
-            raw_extras=raw_extras,
-            filenames=filenames,
-            orig_units=orig_units,
+            last_samps=[mhd["ntpdata"] - 1],
+            filenames=[fname],
+            raw_extras=[raw_extras],
+            orig_units={ch["label"]: ch["unit"] for ch in mhd["ch"]},
+            orig_format="int",
             verbose=verbose,
         )
-
         self.set_annotations(annotations)
 
     def _read_segment_file(self, data, idx, fi, start, stop, cals, mult):
-        """Read a segment of data from a file.
-
-        Only needs to be implemented for readers that support
-        ``preload=False``.
-
-        Parameters
-        ----------
-        data : ndarray, shape (len(idx), stop - start + 1)
-            The data array. Should be modified inplace.
-        idx : ndarray | slice
-            The requested channel indices.
-        fi : int
-            The file index that must be read from.
-        start : int
-            The start sample in the given file.
-        stop : int
-            The stop sample in the given file (inclusive).
-        cals : ndarray, shape (len(idx), 1)
-            Channel calibrations (already sub-indexed).
-        mult : ndarray, shape (len(idx), len(info['chs']) | None
-            The compensation + projection + cals matrix, if applicable.
-        """
-        # Initial checks
-        start = int(start)
-        if stop is None or stop > self._raw_extras[fi]["n_samp"]:
-            stop = self._raw_extras[fi]["n_samp"]
-
-        if start >= stop:
-            raise ValueError("No data in this range.")
-
-        data_offset = self._raw_extras[fi]["start_data"]
-        data_size = 4  # sizeof(int)
-        n_channels = self._raw_extras[fi]["nchan"]
-
-        data_left = (stop - start) * n_channels
-
-        blocksize = ((int(100e6) // data_size) // n_channels) * n_channels
-        blocksize = min(data_left, blocksize)
-
-        with open(self._filenames[fi], "rb") as fid:
-            # position  file pointer
-            fid.seek(data_offset + data_size * start * n_channels, 0)
-
-            for sample_start in np.arange(0, data_left, blocksize) // n_channels:
-                count = min(blocksize, data_left - sample_start * n_channels)
-                block = np.fromfile(fid, ">i4", count=count)
-
-                if self._raw_extras[fi]["data_type"] == 4:
-                    block = block.byteswap()
-                block = block.astype(np.float32)  # convert to float32
-                block = block.reshape(n_channels, -1, order="F")
-
-                n_samples = block.shape[1]
-                sample_stop = sample_start + n_samples
-
-                data_view = data[:, sample_start:sample_stop]
-                _mult_cal_one(data_view, block, idx, cals, mult)
-
-        return data_view
+        """Read a chunk of raw data."""
+        extras = self._raw_extras[fi]
+        _read_segments_file(
+            self,
+            data,
+            idx,
+            fi,
+            start,
+            stop,
+            cals,
+            mult,
+            dtype=extras["dtype"],
+            n_channels=extras["n_channels"],
+            offset=extras["offset"],
+        )
 
 
-@fill_doc
-def read_raw_itab(fname, preload=False, verbose=None) -> RawITAB:
-    """Raw object from ITAB directory.
+@verbose_static("preload")
+def read_raw_itab(
+    fname: Path | str,
+    preload: bool | str = False,
+    *,
+    verbose: bool | str | int | None = None,
+) -> RawITAB:
+    """Reader for an ITAB MEG file.
 
     Parameters
     ----------
-    fname : str
-        The raw file to load. Filename should end with *.raw
-    preload : bool or str (default False)
+    fname : path-like
+        Path to the ITAB data file (``.raw``). The header file with the same name
+        plus ``.mhd`` (e.g., ``run01.raw.mhd``) must be in the same directory.
+    preload : bool | str
         Preload data into memory for data manipulation and faster indexing.
         If True, the data will be preloaded into memory (fast, requires
-        large amount of memory). If preload is a string, preload is the
-        file name of a memory-mapped file which is used to store the data
-        on the hard drive (slower, requires less memory).
-    %(verbose)s
+        large amount of memory). If preload is a string, it is the name of a
+        freshly created memory-mapped file used to store the data on the hard
+        drive (slower, requires less memory). An existing file is overwritten.
+        The caller owns the file and is responsible for removing it after the
+        Raw object is no longer in use. For supported Raw readers, the exact string
+        ``"auto"`` instead reuses decoded data below the directory configured by
+        :func:`mne.set_cache_dir`. Entries persist without a size limit and are mapped
+        copy-on-write. Use ``Path("auto")`` for a literal filename.
+
+        .. versionchanged:: 1.13
+           Support for the ``"auto"`` decoded-data cache was added.
+    verbose : bool | str | int | None
+        Control verbosity of the logging output. If ``None``, use the default
+        verbosity level. See the :ref:`logging documentation <tut-logging>` and
+        :func:`mne.verbose` for details. Should only be passed as a keyword
+        argument.
 
     Returns
     -------
     raw : instance of RawITAB
-        The raw data.
+        A Raw object containing ITAB data.
+        See :class:`mne.io.Raw` for documentation of attributes and methods.
 
     See Also
     --------
-    mne.io.Raw : Documentation of attribute and methods.
+    mne.io.Raw : Documentation of attributes and methods of RawITAB.
 
     Notes
     -----
-    .. versionadded:: 0.01
+    The ``.mhd`` header stores the sensor positions and the head markers relative
+    to the subject's head, so ``info["dev_head_t"]`` is the identity. The first three
+    markers are read as the nasion, right and left preauricular points, the fourth
+    as an extra head point, and any others as HPI coils.
+
+    .. versionadded:: 1.14
     """
     return RawITAB(fname, preload=preload, verbose=verbose)

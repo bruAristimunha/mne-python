@@ -1,18 +1,13 @@
-"""Read .mhd file."""
+"""Read the ITAB .raw.mhd binary header."""
 
-# Author: Vittorio Pizzella <vittorio.pizzella@unich.it>
-#
-# License: BSD (3-clause)
+# Authors: The MNE-Python contributors.
+# License: BSD-3-Clause
+# Copyright the MNE-Python contributors.
 
 import numpy as np
 
 from ...utils import logger
 from .constants import ITAB
-
-
-def _read_double(fid, n=1):
-    """Read a double."""
-    return np.fromfile(fid, "<f8", n)
 
 
 def _read_string(fid, n_bytes, decode=True):
@@ -27,26 +22,19 @@ def _read_char(fid, n=1):
     return np.fromfile(fid, ">B", n)
 
 
-# TODO: Is it similar to _read_char
-def _read_ustring(fid, n_bytes):
-    """Read unsigned character string."""
-    return np.fromfile(fid, ">B", n_bytes)
-
-
-def _read_int2(fid):
-    """Read int from short."""
-    return np.fromfile(fid, "<i2", 1)[0]
-
-
-# TODO: Maybe we could use only one of _read_int*
 def _read_int(fid):
     """Read int."""
-    return np.fromfile(fid, "<i4", 1)[0]
+    return int(np.fromfile(fid, "<i4", 1)[0])
 
 
 def _read_float(fid):
     """Read float."""
-    return np.fromfile(fid, "<f4", 1)[0]
+    return float(np.fromfile(fid, "<f4", 1)[0])
+
+
+def _read_point(fid):
+    """Read a 3D point or direction."""
+    return np.fromfile(fid, "<f4", 3)
 
 
 def _read_position(fid):
@@ -188,14 +176,16 @@ def _read_mhd(name):
             mhd["ch"].append(_read_ch_info(fid))
 
         fid.seek(ITAB.MHD_SENSPOS, 0)
-        mhd["r_center"] = _read_position(fid)
-        mhd["u_center"] = _read_position(fid)
+        # 3D vectors here (not position + orientation): this is the only width
+        # that ends this block exactly at MHD_NMARKER
+        mhd["r_center"] = _read_point(fid)
+        mhd["u_center"] = _read_point(fid)
         mhd["th_center"] = _read_float(fid)
         mhd["fi_center"] = _read_float(fid)
         mhd["rotation-angle"] = _read_float(fid)
         mhd["cosdir"] = list()
         for k in range(3):
-            mhd["cosdir"].append(_read_position(fid))
+            mhd["cosdir"].append(_read_point(fid))
         mhd["irefsys"] = _read_int(fid)
 
         fid.seek(ITAB.MHD_NMARKER, 0)
