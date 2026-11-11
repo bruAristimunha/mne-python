@@ -41,6 +41,10 @@ def _read_eeg(directory):
         coord_frame=FIFF.FIFFV_MNE_COORD_CTF_HEAD,
     )
     with open(fname, "rb") as fid:
+        if fid.read().strip().lower() == b"n/a":
+            warn("EEG position file contains only 'n/a'; no EEG positions are read.")
+            return
+        fid.seek(0)
         for line in fid:
             line = line.strip()
             if len(line) > 0:

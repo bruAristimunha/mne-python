@@ -771,3 +771,28 @@ def test_invalid_meas_date(monkeypatch):
     log = log.getvalue()
     assert "No date or time found" in log
     assert raw.info["meas_date"] == datetime.fromtimestamp(0, tz=UTC)
+
+
+def test_numeric_date():
+    """Numeric dates with dashes match the existing slash spelling."""
+    assert _convert_time("14-10-1925", "12:34:56") == _convert_time(
+        "14/10/1925", "12:34:56"
+    )
+
+
+@pytest.mark.parametrize(
+    "content", [b"n/a", b"N/A\n", b"n/a\n1 EEG001 1 2 3", b"garbage"]
+)
+def test_missing_eeg_positions(tmp_path, content):
+    """Only a file containing the missing-value sentinel is treated as absent."""
+    from mne.io.ctf.eeg import _read_eeg
+
+    directory = tmp_path / "test.ds"
+    directory.mkdir()
+    (directory / "test.eeg").write_bytes(content)
+    if content.strip().lower() == b"n/a":
+        with pytest.warns(RuntimeWarning, match="no EEG positions"):
+            assert _read_eeg(str(directory)) is None
+    else:
+        with pytest.raises(RuntimeError, match="Illegal data"):
+            _read_eeg(str(directory))

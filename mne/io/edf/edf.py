@@ -1313,9 +1313,13 @@ def _read_edf_header(
                 hour, minute, second = (int(x) for x in meas_time.split("."))
             except Exception:
                 hour, minute, second = 0, 0, 0
-            meas_date = meas_date.replace(
-                hour=hour, minute=minute, second=second, tzinfo=UTC
-            )
+            try:
+                meas_date = meas_date.replace(
+                    hour=hour, minute=minute, second=second, tzinfo=UTC
+                )
+            except ValueError:
+                meas_date = None
+                warn("Invalid measurement time encountered in the header.")
         else:
             fid.read(8)  # skip the file's measurement time
             warn("Invalid measurement date encountered in the header.")
