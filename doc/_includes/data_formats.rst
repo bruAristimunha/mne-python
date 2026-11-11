@@ -42,6 +42,8 @@ MEG and EEG   :ref:`Elekta Neuromag <import-neuromag>`      .fif       :func:`mn
 
 MEG           :ref:`FIL OPM MEG <import-fil>`               .bin       :func:`mne.io.read_raw_fil`
 
+MEG           :ref:`ITAB <import-itab>`                     .raw       :func:`mne.io.read_raw_itab`
+
 MEG           :ref:`KIT <import-kit>`                       .sqd       :func:`mne.io.read_raw_kit`,
                                                                        :func:`mne.read_epochs_kit`
 

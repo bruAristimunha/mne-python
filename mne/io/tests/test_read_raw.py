@@ -58,6 +58,7 @@ _testing_mark = testing._pytest_mark()
             ),
         ),
         base / "brainvision/tests/data/test.vhdr",
+        base / "egi/tests/data/test_egi.raw",
         base / "kit/tests/data/test.sqd",
         pytest.param(test_base / "KIT" / "data_berlin.con", marks=_testing_mark),
         pytest.param(
