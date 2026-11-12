@@ -925,14 +925,24 @@ def _read_annotations_eeglab(eeg, uint16_codec=None):
 
     if not hasattr(eeg, "event"):
         events = []
-    elif isinstance(eeg.event, dict) and np.array(eeg.event["latency"]).ndim > 0:
+    elif (
+        isinstance(eeg.event, dict)
+        and np.array(eeg.event["latency"], dtype=object).ndim > 0
+    ):
         events = _dol_to_lod(eeg.event)
     elif not isinstance(eeg.event, np.ndarray | list):
         events = [eeg.event]
     else:
         events = eeg.event
     events = _bunchify(events)
-    description = [str(event.type) for event in events]
+    valid_events = [event for event in events if np.size(event.latency)]
+    if len(valid_events) != len(events):
+        warn(
+            f"{len(events) - len(valid_events)} EEGLAB event(s) have an empty "
+            "latency and are dropped."
+        )
+    events = valid_events
+    description = [str(getattr(event, "type", "n/a")) for event in events]
     onset = [event.latency - 1 for event in events]
     duration = np.zeros(len(onset))
     if len(events) > 0 and hasattr(events[0], "duration"):
@@ -970,6 +980,6 @@ def _read_annotations_eeglab(eeg, uint16_codec=None):
 def _dol_to_lod(dol):
     """Convert a dict of lists to a list of dicts."""
     return [
-        {key: dol[key][ii] for key in dol.keys()}
-        for ii in range(len(dol[list(dol.keys())[0]]))
+        {key: value[ii] if len(value) else value for key, value in dol.items()}
+        for ii in range(max(map(len, dol.values()), default=0))
     ]
