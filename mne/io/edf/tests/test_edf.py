@@ -1373,3 +1373,16 @@ def test_edf_read_from_file_like():
         ]
 
         assert raw.ch_names == channels
+
+
+@pytest.mark.parametrize("start_time", [b"10.47.60", b"24.00.00", b"10.60.00"])
+def test_invalid_start_time(tmp_path, start_time):
+    """An out-of-range clock must not prevent reading the samples."""
+    contents = bytearray(edf_path.read_bytes())
+    contents[176:184] = start_time
+    fname = tmp_path / "invalid_time.edf"
+    fname.write_bytes(contents)
+    with pytest.warns(RuntimeWarning, match="Invalid measurement"):
+        raw = read_raw_edf(fname)
+    assert raw.info["meas_date"] is None
+    assert_array_equal(raw.get_data(), read_raw_edf(edf_path).get_data())
