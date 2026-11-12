@@ -145,6 +145,16 @@ by another and apply the product to the data:
 This operation is performed by :meth:`mne.io.Raw.apply_gradient_compensation`.
 
 
+.. _import-itab:
+
+ITAB (.raw)
+===========
+MEG data from the ITAB system (University of Chieti-Pescara) can be read with
+:func:`mne.io.read_raw_itab`. Each run is a ``.raw`` data file plus a binary
+header with the same name and an added ``.mhd`` extension (e.g.,
+``run01.raw.mhd``), which must be in the same directory.
+
+
 .. _import-kit:
 
 Ricoh/KIT MEG system data (.con/.sqd)

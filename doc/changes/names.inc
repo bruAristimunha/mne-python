@@ -391,6 +391,7 @@
 .. _Robert Luke: https://github.com/rob-luke
 .. _Robert Oostenveld: https://github.com/robertoostenveld
 .. _Robert Seymour: https://neurofractal.github.io
+.. _Roberto Guidotti: https://github.com/robbisg
 .. _Robin Tibor Schirrmeister: https://github.com/robintibor
 .. _Rodrigo Hübner: https://github.com/rodrigohubner
 .. _Roeland Hancock: https://github.com/rhancockn
@@ -497,6 +498,7 @@
 .. _Victoria Peterson: https://github.com/vpeterson
 .. _Vincent Gao: https://github.com/binggao1230
 .. _Virginie van Wassenhove: https://brainthemind.com/virginie-van-wassenhove
+.. _Vittorio Pizzella: https://github.com/vpizzella
 .. _Wei Xu: https://github.com/psyxw
 .. _Will Turner: https://bootstrapbill.github.io
 .. _Wouter Kroot: https://github.com/WouterKroot

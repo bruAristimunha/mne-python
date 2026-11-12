@@ -1,0 +1,1 @@
+Add :func:`mne.io.read_raw_itab` to read ITAB MEG data (``.raw`` files with a ``.raw.mhd`` header), by :newcontrib:`Roberto Guidotti`, :newcontrib:`Vittorio Pizzella`, and `Bruno Aristimunha`_.

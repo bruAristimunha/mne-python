@@ -42,6 +42,7 @@ def _get_supported():
         read_raw_fif,
         read_raw_fil,
         read_raw_gdf,
+        read_raw_itab,
         read_raw_kit,
         read_raw_mef,
         read_raw_nedf,
@@ -75,6 +76,8 @@ def _get_supported():
             "UCL FIL OPM": read_raw_fil,
         },
         ".data": dict(Nicolet=read_raw_nicolet),
+        # ITAB needs a .raw.mhd header next to the file, EGI simple binary does not
+        ".raw": dict(ITAB=read_raw_itab, EGI=read_raw_egi),
         ".sqd": dict(KIT=read_raw_kit),
         ".con": dict(KIT=read_raw_kit),
         ".ds": dict(CTF=read_raw_ctf),
@@ -156,6 +159,7 @@ def read_raw(
     * `~mne.io.read_raw_fif`
     * `~mne.io.read_raw_fil`
     * `~mne.io.read_raw_gdf`
+    * `~mne.io.read_raw_itab`
     * `~mne.io.read_raw_kit`
     * `~mne.io.read_raw_mef`
     * `~mne.io.read_raw_nedf`
